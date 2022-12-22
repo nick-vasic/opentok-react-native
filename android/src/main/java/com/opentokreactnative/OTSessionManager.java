@@ -183,9 +183,10 @@ public class OTSessionManager extends ReactContextBaseJavaModule
             if (cameraPosition.equals("back")) {
                 mPublisher.cycleCamera();
             }
-            if (mPublisher.getCapturer() != null) {
+            // Removing as it is not technically required and is throwing a strange runtime error
+            /*if (mPublisher.getCapturer() != null) {
                 mPublisher.getCapturer().setVideoContentHint(Utils.convertVideoContentHint(properties.getString("videoContentHint")));
-            }
+            }*/
         }
         mPublisher.setPublisherListener(this);
         mPublisher.setAudioLevelListener(this);
