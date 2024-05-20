@@ -125,6 +125,9 @@ public class ScreenCaptureMediaProjectionService extends Service {
         WindowManager window = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         mDisplay = window.getDefaultDisplay();
 
+        // register media projection stop callback
+        mediaProjection.registerCallback(new MediaProjectionStopCallback(), mHandler);
+
         // create virtual display depending on device width / height
         createVirtualDisplay();
 
@@ -133,9 +136,6 @@ public class ScreenCaptureMediaProjectionService extends Service {
         if (mOrientationChangeCallback.canDetectOrientation()) {
             mOrientationChangeCallback.enable();
         }
-
-        // register media projection stop callback
-        mediaProjection.registerCallback(new MediaProjectionStopCallback(), mHandler);
     }
 
     public void stopProjection() {
