@@ -9,15 +9,14 @@
 @protocol OTVideoCapture;
 
 /**
- * Periodically sends video frames to a Publisher by rendering the
- * CALayer for a UIView.
+ * Sends ReplayKit screen-capture frames to a Publisher.
  */
 @interface OTScreenCapture : NSObject <OTVideoCapture>
 
 @property(readonly) UIView* view;
 
 /**
- * Initializes a video capturer that will grab rendered stills of the view.
+ * Initializes a video capturer for a screen-sharing publisher.
  */
 - (instancetype)initWithView:(UIView*)view;
 
