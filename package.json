@@ -60,7 +60,6 @@
     "lint-fix": "eslint \"**/*.{js,ts,tsx}\" --fix",
     "generate:package-info": "node scripts/generate-package-info.js",
     "clean": "del-cli android/build e2e/E2ETestingApp/android/build e2e/E2ETestingApp/android/app/build e2e/E2ETestingApp/ios/build lib",
-    "prepare": "node scripts/generate-package-info.js && bob build && node build-expo.js",
     "release": "release-it",
     "version:local": "node -pe 'require(\"./package.json\").version'",
     "version:published": "npm show @vonage/client-sdk-video-react-native version"
@@ -130,10 +129,6 @@
     "react-native": "*"
   },
   "react-native": "src/index.tsx",
-  "workspaces": [
-    "e2e/E2ETestingApp"
-  ],
-  "packageManager": "yarn@3.6.1",
   "jest": {
     "preset": "react-native",
     "clearMocks": true,
@@ -242,5 +237,6 @@
     "type": "turbo-module",
     "languages": "kotlin-objc",
     "version": "0.54.8"
-  }
+  },
+  "private": true
 }
