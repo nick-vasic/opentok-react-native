@@ -60,7 +60,6 @@
     "lint-fix": "eslint \"**/*.{js,ts,tsx}\" --fix",
     "generate:package-info": "node scripts/generate-package-info.js",
     "clean": "del-cli android/build e2e/E2ETestingApp/android/build e2e/E2ETestingApp/android/app/build e2e/E2ETestingApp/ios/build lib",
-    "prepare": "node scripts/generate-package-info.js && bob build && node build-expo.js",
     "release": "release-it",
     "version:local": "node -pe 'require(\"./package.json\").version'",
     "version:published": "npm show @vonage/client-sdk-video-react-native version"
