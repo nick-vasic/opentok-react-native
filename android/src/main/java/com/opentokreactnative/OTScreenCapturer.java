@@ -2,8 +2,9 @@ package com.opentokreactnative;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
+import android.content.Intent;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 
 import com.opentok.android.BaseVideoCapturer;
@@ -11,60 +12,44 @@ import com.opentok.android.BaseVideoCapturer;
 public class OTScreenCapturer extends BaseVideoCapturer {
 
     private boolean capturing = false;
-    private View contentView;
+    private final Context context;
 
     private int fps = 15;
     private int width = 20;
     private int height = 20;
     private int[] frame;
 
-    private Bitmap bmp;
-    private Canvas canvas;
-
-    private Handler mHandler = new Handler();
+    private Handler mHandler = new Handler(Looper.getMainLooper());
 
     private Runnable newFrame = new Runnable() {
         @Override
         public void run() {
-            if (capturing) {
-                int width = contentView.getWidth();
-                int height = contentView.getHeight();
+            Bitmap bitmap = ScreenCaptureImageActivity.latestBitmap;
+            if (capturing && bitmap != null && !bitmap.isRecycled()) {
+                int bitmapWidth = bitmap.getWidth();
+                int bitmapHeight = bitmap.getHeight();
 
                 if (frame == null ||
-                        OTScreenCapturer.this.width != width ||
-                        OTScreenCapturer.this.height != height) {
+                        OTScreenCapturer.this.width != bitmapWidth ||
+                        OTScreenCapturer.this.height != bitmapHeight) {
 
-                    OTScreenCapturer.this.width = width;
-                    OTScreenCapturer.this.height = height;
-
-                    if (bmp != null) {
-                        bmp.recycle();
-                        bmp = null;
-                    }
-                    bmp = Bitmap.createBitmap(width,
-                            height, Bitmap.Config.ARGB_8888);
-
-                    canvas = new Canvas(bmp);
-                    frame = new int[width * height];
+                    OTScreenCapturer.this.width = bitmapWidth;
+                    OTScreenCapturer.this.height = bitmapHeight;
+                    frame = new int[bitmapWidth * bitmapHeight];
                 }
-                canvas.save();
-                canvas.translate(-contentView.getScrollX(), - contentView.getScrollY());
-                contentView.draw(canvas);
 
-                bmp.getPixels(frame, 0, width, 0, 0, width, height);
+                bitmap.getPixels(frame, 0, bitmapWidth, 0, 0, bitmapWidth, bitmapHeight);
+                provideIntArrayFrame(frame, ARGB, bitmapWidth, bitmapHeight, 0, false);
 
-                provideIntArrayFrame(frame, ARGB, width, height, 0, false);
-
-                canvas.restore();
-
+            }
+            if (capturing) {
                 mHandler.postDelayed(newFrame, 1000 / fps);
-
             }
         }
     };
 
     public OTScreenCapturer(View view) {
-        this.contentView = view;
+        this.context = view.getContext();
     }
 
     @Override
@@ -75,7 +60,11 @@ public class OTScreenCapturer extends BaseVideoCapturer {
     @Override
     public int startCapture() {
         capturing = true;
-
+        Intent intent = new Intent(context, ScreenCaptureImageActivity.class);
+        if (!(context instanceof android.app.Activity)) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        context.startActivity(intent);
         mHandler.postDelayed(newFrame, 1000 / fps);
         return 0;
     }
@@ -84,6 +73,8 @@ public class OTScreenCapturer extends BaseVideoCapturer {
     public int stopCapture() {
         capturing = false;
         mHandler.removeCallbacks(newFrame);
+        Intent intent = new Intent(context, ScreenCaptureMediaProjectionService.class);
+        context.stopService(intent);
         return 0;
     }
 

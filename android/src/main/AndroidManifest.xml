@@ -1,3 +1,17 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
       package="com.opentokreactnative">
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+  <application>
+    <activity
+      android:name="com.opentokreactnative.ScreenCaptureImageActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    <service
+      android:name="com.opentokreactnative.ScreenCaptureMediaProjectionService"
+      android:enabled="true"
+      android:exported="false"
+      android:foregroundServiceType="mediaProjection" />
+  </application>
 </manifest>
