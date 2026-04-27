@@ -1,4 +1,11 @@
 {
   "extends": "./tsconfig",
-  "exclude": ["e2e/E2ETestingApp", "lib"]
+  "exclude": [
+    "e2e",
+    "lib",
+    "**/__tests__",
+    "**/__mocks__",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
 }
