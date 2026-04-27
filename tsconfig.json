@@ -26,5 +26,13 @@
     "strict": true,
     "target": "ESNext",
     "verbatimModuleSyntax": true
-  }
+  },
+  "exclude": [
+    "example",
+    "lib",
+    "**/__tests__",
+    "**/__mocks__",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
 }
