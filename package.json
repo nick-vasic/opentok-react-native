@@ -130,10 +130,6 @@
     "react-native": "*"
   },
   "react-native": "src/index.tsx",
-  "workspaces": [
-    "e2e/E2ETestingApp"
-  ],
-  "packageManager": "yarn@3.6.1",
   "jest": {
     "preset": "react-native",
     "clearMocks": true,
