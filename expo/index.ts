@@ -54,6 +54,8 @@ const withAndroidPermissions: ConfigPlugin = (config) => {
       'android.permission.READ_PHONE_STATE',
       'android.permission.RECORD_AUDIO',
       'android.permission.ACCESS_NETWORK_STATE',
+      'android.permission.FOREGROUND_SERVICE',
+      'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
     ];
 
     permissions.forEach((permission) => {
@@ -82,6 +84,60 @@ const withAndroidPermissions: ConfigPlugin = (config) => {
   });
 };
 
+const ensureManifestEntry = (
+  entries: any[],
+  name: string,
+  createEntry: () => any
+) => {
+  const exists = entries.some((entry) => entry.$?.['android:name'] === name);
+  if (!exists) {
+    entries.push(createEntry());
+  }
+};
+
+/**
+ * Add Android activity and foreground service entries needed for screen sharing
+ */
+const withAndroidScreenCapture: ConfigPlugin = (config) => {
+  return withAndroidManifest(config, (config) => {
+    const application = config.modResults.manifest.application?.[0];
+    if (!application) {
+      return config;
+    }
+
+    application.activity = application.activity ?? [];
+    application.service = application.service ?? [];
+
+    ensureManifestEntry(
+      application.activity,
+      'com.opentokreactnative.ScreenCaptureImageActivity',
+      () => ({
+        $: {
+          'android:name': 'com.opentokreactnative.ScreenCaptureImageActivity',
+          'android:exported': 'false',
+          'android:theme': '@android:style/Theme.Translucent.NoTitleBar',
+        },
+      })
+    );
+
+    ensureManifestEntry(
+      application.service,
+      'com.opentokreactnative.ScreenCaptureMediaProjectionService',
+      () => ({
+        $: {
+          'android:name':
+            'com.opentokreactnative.ScreenCaptureMediaProjectionService',
+          'android:enabled': 'true',
+          'android:exported': 'false',
+          'android:foregroundServiceType': 'mediaProjection',
+        },
+      })
+    );
+
+    return config;
+  });
+};
+
 /**
  * Main Expo Config Plugin for @vonage/client-sdk-video-react-native
  * Automatically configures native permissions and dependencies
@@ -93,6 +149,7 @@ const withVonage: ConfigPlugin<VonagePluginiOSProps> = (
   return withPlugins(config, [
     [withIosPermissions, props],
     withAndroidPermissions,
+    withAndroidScreenCapture,
   ]);
 };
 
