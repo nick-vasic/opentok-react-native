@@ -13,9 +13,9 @@
 
 // defines for image scaling
 // From https://bugs.chromium.org/p/webrtc/issues/detail?id=4643#c7 :
-// Don't send any image larger than 1280px on either edge. Additionally, don't
+// Don't send any image larger than 960px on either edge. Additionally, don't
 // send any image with dimensions %16 != 0
-#define MAX_EDGE_SIZE_LIMIT 1280.0f
+#define MAX_EDGE_SIZE_LIMIT 960.0f
 #define EDGE_DIMENSION_COMMON_FACTOR 16.0f
 
 /**
