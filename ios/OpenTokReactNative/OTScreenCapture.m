@@ -354,7 +354,7 @@
     if (@available(iOS 11.0, *)) {
         [self.recorder startCaptureWithHandler:^(CMSampleBufferRef sampleBuffer, RPSampleBufferType bufferType, NSError* error) {
             double timeSinceLastCapture = [NSDate.date timeIntervalSince1970] - [self lastCaptureMillis];
-            if (timeSinceLastCapture > 0.1) {
+            if (timeSinceLastCapture > 0.2) {
             if (bufferType == RPSampleBufferTypeVideo) {
                 CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
                 CIImage *ciImage = [CIImage imageWithCVPixelBuffer:imageBuffer];
