@@ -11,13 +11,12 @@
 #import "OTScreenCapture.h"
 
 @implementation OTScreenCapture {
-    CMTime _minFrameDuration;
     dispatch_queue_t _queue;
     dispatch_source_t _timer;
 
     CVPixelBufferRef _pixelBuffer;
     BOOL _capturing;
-    OTVideoFrame* _videoFrame;
+    BOOL _timerResumed;
     UIView* _view;
 }
 
@@ -32,18 +31,31 @@
     self = [super init];
     if (self) {
         _view = view;
-        // Recommend sending 5 frames per second: Allows for higher image
-        // quality per frame
-        _minFrameDuration = CMTimeMake(1, 5);
         _queue = dispatch_queue_create("SCREEN_CAPTURE", NULL);
-
-        OTVideoFormat *format = [[OTVideoFormat alloc] init];
-        [format setPixelFormat:OTPixelFormatARGB];
-
-        _videoFrame = [[OTVideoFrame alloc] initWithFormat:format];
-
     }
     return self;
+}
+
+- (void)createTimer {
+    if (_timer) {
+        return;
+    }
+
+    __unsafe_unretained OTScreenCapture* _self = self;
+    _timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, DISPATCH_TIMER_STRICT, _queue);
+    _timerResumed = NO;
+
+    dispatch_source_set_timer(_timer, dispatch_walltime(NULL, 0),
+                              200ull * NSEC_PER_MSEC, 50ull * NSEC_PER_MSEC);
+
+    dispatch_source_set_event_handler(_timer, ^{
+        @autoreleasepool {
+            if ([_self latestImage] != nil) {
+                CGImageRef paddedScreen = [self resizeAndPadImage:self.latestImage];
+                [_self consumeFrame:paddedScreen];
+            }
+        }
+    });
 }
 
 - (void)dealloc
@@ -61,23 +73,18 @@
     CGFloat width = CGImageGetWidth(image);
     CGFloat height = CGImageGetHeight(image);
 
-    if (_videoFrame.format.imageHeight == height &&
-        _videoFrame.format.imageWidth == width)
-    {
+    if (_pixelBuffer != NULL &&
+        CVPixelBufferGetHeight(_pixelBuffer) == height &&
+        CVPixelBufferGetWidth(_pixelBuffer) == width) {
         // don't rock the boat. if nothing has changed, don't update anything.
         return;
     }
 
-    [_videoFrame.format.bytesPerRow removeAllObjects];
-    [_videoFrame.format.bytesPerRow addObject:@(width * 4)];
-    [_videoFrame.format setImageHeight:height];
-    [_videoFrame.format setImageWidth:width];
-
     CGSize frameSize = CGSizeMake(width, height);
     NSDictionary *options = [NSDictionary dictionaryWithObjectsAndKeys:
-                             @NO,
+                             @YES,
                              kCVPixelBufferCGImageCompatibilityKey,
-                             @NO,
+                             @YES,
                              kCVPixelBufferCGBitmapContextCompatibilityKey,
                              nil];
 
@@ -103,32 +110,28 @@
  * block to execute periodically to send video frames.
  */
 - (void)initCapture {
-    __unsafe_unretained OTScreenCapture* _self = self;
-    _timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, DISPATCH_TIMER_STRICT, _queue);
-
-    dispatch_source_set_timer(_timer, dispatch_walltime(NULL, 0),
-                              200ull * NSEC_PER_MSEC, 50ull * NSEC_PER_MSEC);
-
-    dispatch_source_set_event_handler(_timer, ^{
-        @autoreleasepool {
-            if ([_self latestImage] != nil) {
-                CGImageRef paddedScreen = [self resizeAndPadImage:self.latestImage];
-                [_self consumeFrame:paddedScreen];
-            }
-        }
-    });
+    [self createTimer];
 }
 
 - (void)releaseCapture {
+    if (_timer && !_timerResumed) {
+        dispatch_resume(_timer);
+    }
+    if (_timer) {
+        dispatch_source_cancel(_timer);
+    }
     _timer = nil;
+    _timerResumed = NO;
 }
 
 - (int32_t)startCapture
 {
     _capturing = YES;
 
-    if (_timer) {
+    [self createTimer];
+    if (_timer && !_timerResumed) {
         dispatch_resume(_timer);
+        _timerResumed = YES;
     }
     [self startRecording];
     return 0;
@@ -138,11 +141,11 @@
 {
     _capturing = NO;
 
-    dispatch_sync(_queue, ^{
-        if (self->_timer) {
-            dispatch_source_cancel(self->_timer);
-        }
-    });
+    if (_timer) {
+        dispatch_source_cancel(_timer);
+        _timer = nil;
+        _timerResumed = NO;
+    }
     [self stopRecording];
 
     return 0;
@@ -311,37 +314,30 @@
 
     [self checkImageSize:frame];
 
-    static mach_timebase_info_data_t time_info;
-    uint64_t time_stamp = 0;
-
     if (!(_capturing && self.videoCaptureConsumer)) {
         return;
     }
 
+    CMTime time = [self getTimeStamp];
+    CVImageBufferRef ref = [self pixelBufferFromCGImage:frame];
+
+    [self.videoCaptureConsumer consumeImageBuffer:ref
+                                      orientation:OTVideoOrientationUp
+                                        timestamp:time
+                                         metadata:nil];
+}
+
+- (CMTime)getTimeStamp {
+    static mach_timebase_info_data_t time_info;
+    uint64_t time_stamp = 0;
     if (time_info.denom == 0) {
         (void) mach_timebase_info(&time_info);
     }
-
     time_stamp = mach_absolute_time();
     time_stamp *= time_info.numer;
     time_stamp /= time_info.denom;
-
     CMTime time = CMTimeMake(time_stamp, 1000);
-    CVImageBufferRef ref = [self pixelBufferFromCGImage:frame];
-
-    CVPixelBufferLockBaseAddress(ref, 0);
-
-    _videoFrame.timestamp = time;
-    _videoFrame.format.estimatedFramesPerSecond =
-    _minFrameDuration.timescale / _minFrameDuration.value;
-    _videoFrame.format.estimatedCaptureDelay = 100;
-    _videoFrame.orientation = OTVideoOrientationUp;
-
-    [_videoFrame clearPlanes];
-    [_videoFrame.planes addPointer:CVPixelBufferGetBaseAddress(ref)];
-    [self.videoCaptureConsumer consumeFrame:_videoFrame];
-
-    CVPixelBufferUnlockBaseAddress(ref, 0);
+    return time;
 }
 
 
