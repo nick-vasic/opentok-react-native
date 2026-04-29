@@ -174,8 +174,7 @@ public class OTSessionManager extends ReactContextBaseJavaModule
         Float cameraZoomFactor = (float)properties.getDouble("cameraZoomFactor");
         Publisher mPublisher = null;
         if (videoSource.equals("screen")) {
-            View view = getCurrentActivity().getWindow().getDecorView().getRootView();
-            OTScreenCapturer capturer = new OTScreenCapturer(view);
+            OTScreenCapturer capturer = new OTScreenCapturer(getCurrentActivity());
             mPublisher = new Publisher.Builder(this.getReactApplicationContext())
                     .audioTrack(audioTrack)
                     .videoTrack(videoTrack)
@@ -203,9 +202,10 @@ public class OTSessionManager extends ReactContextBaseJavaModule
             if (cameraPosition.equals("back")) {
                 mPublisher.cycleCamera();
             }
-            if (videoTrack && mPublisher.getCapturer() != null) {
+            // Removing as it is not technically required and is throwing a strange runtime error
+            /*if (videoTrack && mPublisher.getCapturer() != null) {
                 mPublisher.getCapturer().setVideoContentHint(Utils.convertVideoContentHint(properties.getString("videoContentHint")));
-            }
+            }*/
         }
         mPublisher.setPublisherListener(this);
         mPublisher.setAudioLevelListener(this);
