@@ -18,6 +18,7 @@
     BOOL _capturing;
     BOOL _timerResumed;
     UIView* _view;
+    CIContext* _ciContext;
 }
 
 @synthesize videoCaptureConsumer;
@@ -32,6 +33,7 @@
     if (self) {
         _view = view;
         _queue = dispatch_queue_create("SCREEN_CAPTURE", NULL);
+        _ciContext = [CIContext contextWithOptions:nil];
     }
     return self;
 }
@@ -351,14 +353,12 @@
 
     if (@available(iOS 11.0, *)) {
         [self.recorder startCaptureWithHandler:^(CMSampleBufferRef sampleBuffer, RPSampleBufferType bufferType, NSError* error) {
-            NSLog(@"Capture %@, %li, %@", sampleBuffer, (long)bufferType, error);
             double timeSinceLastCapture = [NSDate.date timeIntervalSince1970] - [self lastCaptureMillis];
             if (timeSinceLastCapture > 0.1) {
             if (bufferType == RPSampleBufferTypeVideo) {
                 CVImageBufferRef imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer);
                 CIImage *ciImage = [CIImage imageWithCVPixelBuffer:imageBuffer];
-                CIContext *temporaryContext = [CIContext contextWithOptions:nil];
-                CGImageRef videoImage = [temporaryContext
+                CGImageRef videoImage = [self->_ciContext
                                          createCGImage:ciImage
                                          fromRect:CGRectMake(0, 0,
                                                              CVPixelBufferGetWidth(imageBuffer),
