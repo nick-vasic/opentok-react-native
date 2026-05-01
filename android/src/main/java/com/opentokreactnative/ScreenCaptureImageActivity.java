@@ -13,6 +13,7 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.media.projection.MediaProjectionConfig;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -35,6 +36,7 @@ public class ScreenCaptureImageActivity extends Activity {
 
     public static ScreenCaptureImageActivity captureActivity;
     public static Bitmap latestBitmap;
+    public static volatile boolean consentInProgress;
 
 
     /****************************************** Activity Lifecycle methods ************************/
@@ -42,6 +44,13 @@ public class ScreenCaptureImageActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         this.captureActivity = this;
+        Log.d("ScreenShare", "[Activity] onCreate: starting projection flow");
+
+        if (ScreenCaptureMediaProjectionService.isProjectionActive()) {
+            Log.d("ScreenShare", "[Activity] onCreate: projection already active, finishing without showing consent dialog");
+            finish();
+            return;
+        }
 
 
         // start projection
@@ -51,15 +60,23 @@ public class ScreenCaptureImageActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Log.d("ScreenShare", "[Activity] onActivityResult: requestCode=" + requestCode + " resultCode=" + resultCode + " data=" + (data != null ? "present" : "null"));
         if (requestCode == REQUEST_CODE) {
-
-            // Need to start foreground service due to changes in API target 10+
-            Intent mediaProjectionIntent =  new Intent(this, ScreenCaptureMediaProjectionService.class);
-            mediaProjectionIntent.setAction(ScreenCaptureMediaProjectionService.ACTION_START);
-            mediaProjectionIntent.putExtra(ScreenCaptureMediaProjectionService.EXTRA_RESULT_DATA, data);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(mediaProjectionIntent);
+            consentInProgress = false;
+            if (resultCode == RESULT_OK && data != null) {
+                // User approved — start the projection
+                Log.d("ScreenShare", "[Activity] onActivityResult: user APPROVED, sending ACTION_START");
+                Intent mediaProjectionIntent = new Intent(this, ScreenCaptureMediaProjectionService.class);
+                mediaProjectionIntent.setAction(ScreenCaptureMediaProjectionService.ACTION_START);
+                mediaProjectionIntent.putExtra(ScreenCaptureMediaProjectionService.EXTRA_RESULT_DATA, data);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(mediaProjectionIntent);
+                } else {
+                    startService(mediaProjectionIntent);
+                }
+            } else {
+                // User cancelled — no service to start/stop because we don't pre-start it.
+                Log.d("ScreenShare", "[Activity] onActivityResult: user CANCELLED, no service action");
             }
 
             /*if (sMediaProjection != null) {
@@ -83,24 +100,50 @@ public class ScreenCaptureImageActivity extends Activity {
             }*/
         }
         // Does this need to finish?
+        Log.d("ScreenShare", "[Activity] onActivityResult: finishing activity");
         this.finish();
     }
 
     /****************************************** UI Widget Callbacks *******************************/
     private void startProjection() {
-        MediaProjectionManager projectionManager = (MediaProjectionManager)
-                getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-        startActivityForResult(projectionManager.createScreenCaptureIntent(), REQUEST_CODE);
+        if (consentInProgress) {
+            Log.d("ScreenShare", "[Activity] startProjection: consent already in progress, skipping duplicate dialog launch");
+            return;
+        }
+        consentInProgress = true;
+
+        // Request consent first; service is started only after RESULT_OK.
+        Log.d("ScreenShare", "[Activity] startProjection: showing consent dialog");
+
+        MediaProjectionManager projectionManager =
+            (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+
+        Intent captureIntent;
+        Log.d("ScreenShare", "[Activity] startProjection: creating capture intent for Android version " + Build.VERSION.SDK_INT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) { // Android 14+
+            MediaProjectionConfig config = MediaProjectionConfig.createConfigForDefaultDisplay();
+            captureIntent = projectionManager.createScreenCaptureIntent(config);
+        } else {
+            captureIntent = projectionManager.createScreenCaptureIntent();
+        }
+        startActivityForResult(captureIntent, REQUEST_CODE);
     }
 
     public void stopProjection() {
         // Send stop action to service
+        Log.d("ScreenShare", "[Activity] stopProjection: sending ACTION_STOP");
+        if (!ScreenCaptureMediaProjectionService.isProjectionActive()) {
+            Log.d("ScreenShare", "[Activity] stopProjection: projection already inactive, skipping ACTION_STOP");
+            return;
+        }
         Intent mediaProjectionIntent =  new Intent(this,
                 ScreenCaptureMediaProjectionService.class);
         mediaProjectionIntent.setAction(ScreenCaptureMediaProjectionService.ACTION_STOP);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(mediaProjectionIntent);
+        } else {
+            startService(mediaProjectionIntent);
         }
     }
 

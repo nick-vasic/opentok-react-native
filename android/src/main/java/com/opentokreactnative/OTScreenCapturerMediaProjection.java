@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Canvas;
 import android.os.Handler;
+import android.util.Log;
 import com.opentok.android.BaseVideoCapturer;
 
 public class OTScreenCapturerMediaProjection extends BaseVideoCapturer {
@@ -53,6 +54,7 @@ public class OTScreenCapturerMediaProjection extends BaseVideoCapturer {
 
     @Override
     public int startCapture() {
+        Log.d("ScreenShare", "[Capturer] startCapture: launching ScreenCaptureImageActivity");
         capturing = true;
         Intent i = new Intent(this.currentActivity, ScreenCaptureImageActivity.class);
         currentActivity.startActivity(i);
@@ -62,8 +64,13 @@ public class OTScreenCapturerMediaProjection extends BaseVideoCapturer {
 
     @Override
     public int stopCapture() {
+        Log.d("ScreenShare", "[Capturer] stopCapture: called, captureActivity=" + (ScreenCaptureImageActivity.captureActivity != null ? "set" : "null"));
         capturing = false;
         mHandler.removeCallbacks(newFrame);
+        if (ScreenCaptureImageActivity.captureActivity == null) {
+            Log.e("ScreenShare", "[Capturer] stopCapture: captureActivity is null, cannot stop projection");
+            return 0;
+        }
         ScreenCaptureImageActivity.captureActivity.stopProjection();
         return 0;
     }
