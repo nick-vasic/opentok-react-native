@@ -172,9 +172,11 @@ public class OTSessionManager extends ReactContextBaseJavaModule
         Boolean scalableScreenshare = properties.getBoolean("scalableScreenshare");
         Boolean cameraTorch = properties.getBoolean("cameraTorch");
         Float cameraZoomFactor = (float)properties.getDouble("cameraZoomFactor");
+        Log.d("ScreenShare", "[SessionManager] initPublisher: publisherId=" + publisherId + " videoSource=" + videoSource + " publishVideo=" + publishVideo + " audioTrack=" + audioTrack + " videoTrack=" + videoTrack);
         Publisher mPublisher = null;
         if (videoSource.equals("screen")) {
             OTScreenCapturer capturer = new OTScreenCapturer(getCurrentActivity());
+            Log.d("ScreenShare", "[SessionManager] initPublisher: using OTScreenCapturer for screen source currentActivity=" + (getCurrentActivity() != null ? getCurrentActivity().getClass().getSimpleName() : "null"));
             mPublisher = new Publisher.Builder(this.getReactApplicationContext())
                     .audioTrack(audioTrack)
                     .videoTrack(videoTrack)
@@ -1356,6 +1358,10 @@ public class OTSessionManager extends ReactContextBaseJavaModule
             Publisher publisher = mPublishers.get(key);
 
             if (publisher != null) {
+                if (publisher.getCapturer() instanceof OTScreenCapturer) {
+                    Log.d("ScreenShare", "[SessionManager] onHostResume: skipping publisher.onResume for screen capturer publisherId=" + key);
+                    continue;
+                }
                 publisher.onResume();
             }
         }
@@ -1369,6 +1375,10 @@ public class OTSessionManager extends ReactContextBaseJavaModule
             Publisher publisher = mPublishers.get(key);
 
             if (publisher != null) {
+                if (publisher.getCapturer() instanceof OTScreenCapturer) {
+                    Log.d("ScreenShare", "[SessionManager] onHostPause: skipping publisher.onPause for screen capturer publisherId=" + key);
+                    continue;
+                }
                 publisher.onPause();
             }
         }

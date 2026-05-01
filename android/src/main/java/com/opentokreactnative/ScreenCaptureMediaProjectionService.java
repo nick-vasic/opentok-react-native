@@ -37,6 +37,7 @@ public class ScreenCaptureMediaProjectionService extends Service {
 
     public static final String ACTION_START = "ACTION_START";
     public static final String ACTION_STOP = "ACTION_STOP";
+    public static final String ACTION_PREPARE = "ACTION_PREPARE";
     public static final String EXTRA_RESULT_DATA = "EXTRA_RESULT_DATA";
 
     private static final String NOTIFICATION_CHANNEL_ID = "Screen Capture Channel";
@@ -55,9 +56,14 @@ public class ScreenCaptureMediaProjectionService extends Service {
     private MediaProjectionManager mProjectionManager;
     private ImageReader mImageReader;
     private static final String SCREENCAP_NAME = "screencap";
+    private static volatile boolean projectionActive = false;
     private static final int VIRTUAL_DISPLAY_FLAGS =
             DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY |
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC;
+
+    public static boolean isProjectionActive() {
+        return projectionActive;
+    }
 
     @Nullable
     @Override
@@ -105,46 +111,77 @@ public class ScreenCaptureMediaProjectionService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && intent.getAction().equals(ACTION_START)) {
-            mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK,
-                    (Intent) intent.getParcelableExtra(EXTRA_RESULT_DATA));
+        if (intent == null) {
+            Log.w("ScreenShare", "[Service] onStartCommand: null intent (system restart), ignoring");
+            return Service.START_NOT_STICKY;
+        }
+        String action = intent.getAction();
+        Log.d("ScreenShare", "[Service] onStartCommand: action=" + action + " mediaProjection=" + (mediaProjection != null ? "set" : "null"));
+        if (ACTION_PREPARE.equals(action)) {
+            Log.d("ScreenShare", "[Service] ACTION_PREPARE: service in foreground, awaiting consent dialog result");
+            return Service.START_STICKY;
+        } else if (ACTION_START.equals(action)) {
+            Intent resultData;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                resultData = intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent.class);
+            } else {
+                resultData = (Intent) intent.getParcelableExtra(EXTRA_RESULT_DATA);
+            }
+            Log.d("ScreenShare", "[Service] ACTION_START: resultData=" + (resultData != null ? "present" : "null"));
+            if (resultData != null) {
+                mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, resultData);
+                Log.d("ScreenShare", "[Service] getMediaProjection result: " + (mediaProjection != null ? "ok" : "null"));
+            }
             if (mediaProjection != null) {
                 startProjection();
+            } else {
+                Log.e("ScreenShare", "[Service] ACTION_START: mediaProjection is null, cannot start projection");
             }
             return Service.START_STICKY;
         } else {
+            Log.d("ScreenShare", "[Service] ACTION_STOP (or unknown action=" + action + "): stopping projection");
             stopProjection();
-            return  Service.START_NOT_STICKY;
+            return Service.START_NOT_STICKY;
         }
     }
 
     private void startProjection() {
+        Log.d("ScreenShare", "[Service] startProjection: called");
         // display metrics
         DisplayMetrics metrics = getResources().getDisplayMetrics();
         mDensity = metrics.densityDpi;
         WindowManager window = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         mDisplay = window.getDefaultDisplay();
 
+        // register media projection stop callback BEFORE createVirtualDisplay (required on API 34+)
+        mediaProjection.registerCallback(new MediaProjectionStopCallback(), mHandler);
+        Log.d("ScreenShare", "[Service] startProjection: callback registered");
+
         // create virtual display depending on device width / height
         createVirtualDisplay();
+        projectionActive = true;
+        Log.d("ScreenShare", "[Service] startProjection: virtual display created " + mWidth + "x" + mHeight);
 
         // register orientation change callback
         mOrientationChangeCallback = new OrientationChangeCallback(this);
         if (mOrientationChangeCallback.canDetectOrientation()) {
             mOrientationChangeCallback.enable();
         }
-
-        // register media projection stop callback
-        mediaProjection.registerCallback(new MediaProjectionStopCallback(), mHandler);
     }
 
     public void stopProjection() {
+        Log.d("ScreenShare", "[Service] stopProjection: called, mediaProjection=" + (mediaProjection != null ? "set" : "null"));
         mHandler.post(new Runnable() {
             @Override
             public void run() {
                 if (mediaProjection != null) {
+                    Log.d("ScreenShare", "[Service] stopProjection: stopping mediaProjection");
                     mediaProjection.stop();
+                    mediaProjection = null;
                 }
+                projectionActive = false;
+                Log.d("ScreenShare", "[Service] stopProjection: calling stopSelf");
+                stopSelf();
             }
         });
     }
@@ -194,14 +231,21 @@ public class ScreenCaptureMediaProjectionService extends Service {
     private class MediaProjectionStopCallback extends MediaProjection.Callback {
         @Override
         public void onStop() {
-            Log.e("ScreenCapture", "stopping projection.");
+            Log.d("ScreenShare", "[Service] MediaProjectionStopCallback.onStop: projection stopped by system/user");
             mHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    if (mVirtualDisplay != null) mVirtualDisplay.release();
-                    if (mImageReader != null) mImageReader.setOnImageAvailableListener(null, null);
+                    if (mVirtualDisplay != null) { mVirtualDisplay.release(); mVirtualDisplay = null; Log.d("ScreenShare", "[Service] onStop: virtualDisplay released"); }
+                    if (mImageReader != null) { mImageReader.setOnImageAvailableListener(null, null); mImageReader = null; Log.d("ScreenShare", "[Service] onStop: imageReader released"); }
                     if (mOrientationChangeCallback != null) mOrientationChangeCallback.disable();
-                    mediaProjection.unregisterCallback(MediaProjectionStopCallback.this);
+                    if (mediaProjection != null) {
+                        mediaProjection.unregisterCallback(MediaProjectionStopCallback.this);
+                        mediaProjection = null;
+                        Log.d("ScreenShare", "[Service] onStop: mediaProjection unregistered and nulled");
+                    }
+                    projectionActive = false;
+                    Log.d("ScreenShare", "[Service] onStop: calling stopSelf");
+                    stopSelf();
                 }
             });
         }
